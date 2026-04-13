@@ -1,0 +1,1010 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Finance Manager</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <script src="https://unpkg.com/prop-types@15/prop-types.min.js"></script>
+  <script src="https://unpkg.com/recharts@2.10.3/umd/Recharts.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    *{box-sizing:border-box}
+    body{margin:0;font-family:system-ui,-apple-system,sans-serif;-webkit-font-smoothing:antialiased}
+    ::-webkit-scrollbar{width:5px;height:5px}
+    ::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:3px}
+    .line-clamp-2{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+    @keyframes pulse2{0%,100%{opacity:1}50%{opacity:.4}}
+    .live-pulse{animation:pulse2 2s infinite}
+  </style>
+</head>
+<body class="bg-slate-100">
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect, useMemo, useContext, createContext, useCallback } = React;
+const { PieChart, Pie, Cell, Tooltip: RT, Legend, ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid } = Recharts;
+
+// ── FORMATTERS ──────────────────────────────────────────────────────────────
+const fmt  = n => new Intl.NumberFormat('en-IN',{style:'currency',currency:'INR',maximumFractionDigits:0}).format(n||0);
+const fmtD = n => new Intl.NumberFormat('en-IN',{style:'currency',currency:'INR',minimumFractionDigits:2,maximumFractionDigits:2}).format(n||0);
+const fmtTime = d => d ? new Date(d).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}) : '--';
+
+// ── SIP DATA ─────────────────────────────────────────────────────────────────
+const SIP_FUNDS = [
+  {id:1, name:'Mirae Asset Large Cap Fund',    category:'Large Cap',  amc:'Mirae Asset',     schemeCode:118825, returns:{'1y':22.3,'3y':18.5,'5y':17.2}, risk:'Moderate',       minSIP:1000, rating:5, aum:'₹35,680 Cr', expenseRatio:0.55, nav:108.45, description:'Invests in top 100 market cap companies with consistent long-term performance.'},
+  {id:2, name:'Axis Bluechip Fund',            category:'Large Cap',  amc:'Axis',            schemeCode:120465, returns:{'1y':19.8,'3y':16.2,'5y':15.9}, risk:'Moderate',       minSIP:500,  rating:4, aum:'₹42,130 Cr', expenseRatio:0.63, nav:72.30,  description:'Focus on quality large cap stocks with strong fundamentals.'},
+  {id:3, name:'HDFC Mid-Cap Opportunities Fund',category:'Mid Cap',   amc:'HDFC',            schemeCode:118981, returns:{'1y':38.5,'3y':27.3,'5y':23.8}, risk:'High',           minSIP:100,  rating:5, aum:'₹68,450 Cr', expenseRatio:0.72, nav:183.60, description:'Oldest mid cap fund with exceptional 20+ year track record.'},
+  {id:4, name:'Kotak Emerging Equity Fund',    category:'Mid Cap',    amc:'Kotak',           schemeCode:136118, returns:{'1y':35.2,'3y':25.8,'5y':22.1}, risk:'High',           minSIP:1000, rating:4, aum:'₹48,900 Cr', expenseRatio:0.48, nav:142.80, description:'Emerging mid-size companies with strong growth potential.'},
+  {id:5, name:'SBI Small Cap Fund',            category:'Small Cap',  amc:'SBI',             schemeCode:125497, returns:{'1y':45.2,'3y':32.1,'5y':29.7}, risk:'Very High',      minSIP:500,  rating:5, aum:'₹28,760 Cr', expenseRatio:0.68, nav:165.20, description:'High-growth small cap fund with proven stock selection.'},
+  {id:6, name:'Quant Small Cap Fund',          category:'Small Cap',  amc:'Quant',           schemeCode:120828, returns:{'1y':52.8,'3y':38.4,'5y':33.2}, risk:'Very High',      minSIP:1000, rating:5, aum:'₹21,340 Cr', expenseRatio:0.62, nav:248.90, description:'Quantitative model-driven small cap investing.'},
+  {id:7, name:'Mirae Asset Tax Saver Fund',   category:'ELSS',       amc:'Mirae Asset',     schemeCode:118778, returns:{'1y':28.4,'3y':22.1,'5y':20.3}, risk:'Moderate-High',  minSIP:500,  rating:5, aum:'₹25,890 Cr', expenseRatio:0.57, nav:42.15,  description:'3-year lock-in ELSS. Best for 80C deduction with excellent returns.'},
+  {id:8, name:'Quant ELSS Tax Saver Fund',    category:'ELSS',       amc:'Quant',           schemeCode:120827, returns:{'1y':35.6,'3y':28.9,'5y':24.5}, risk:'High',           minSIP:500,  rating:5, aum:'₹8,760 Cr',  expenseRatio:0.52, nav:352.40, description:'Aggressive ELSS with quantitative approach and high alpha.'},
+  {id:9, name:'Axis Long Term Equity Fund',   category:'ELSS',       amc:'Axis',            schemeCode:120468, returns:{'1y':18.2,'3y':14.5,'5y':16.8}, risk:'Moderate',       minSIP:500,  rating:4, aum:'₹32,450 Cr', expenseRatio:0.68, nav:78.65,  description:'Conservative ELSS focusing on quality large cap stocks.'},
+  {id:10,name:'Parag Parikh Flexi Cap Fund',  category:'Flexi Cap',  amc:'PPFAS',           schemeCode:122639, returns:{'1y':29.8,'3y':23.5,'5y':22.8}, risk:'Moderate',       minSIP:1000, rating:5, aum:'₹62,340 Cr', expenseRatio:0.58, nav:84.20,  description:'Value investing with 10-15% international diversification.'},
+  {id:11,name:'JM Flexicap Fund',             category:'Flexi Cap',  amc:'JM Financial',    schemeCode:119598, returns:{'1y':46.2,'3y':31.8,'5y':26.4}, risk:'High',           minSIP:1000, rating:5, aum:'₹4,230 Cr',  expenseRatio:0.38, nav:126.80, description:'Aggressive flexi cap with high mid and small cap allocation.'},
+  {id:12,name:'HDFC Short Term Debt Fund',    category:'Debt',       amc:'HDFC',            schemeCode:118988, returns:{'1y':7.8, '3y':6.9, '5y':7.2},  risk:'Low',            minSIP:1000, rating:4, aum:'₹18,560 Cr', expenseRatio:0.32, nav:28.45,  description:'Stable returns with short duration debt instruments.'},
+  {id:13,name:'ICICI Pru Corporate Bond Fund',category:'Debt',       amc:'ICICI Prudential',schemeCode:120594, returns:{'1y':8.4, '3y':7.5, '5y':7.8},  risk:'Low',            minSIP:1000, rating:4, aum:'₹22,780 Cr', expenseRatio:0.28, nav:26.80,  description:'High quality corporate bonds with steady returns.'},
+  {id:14,name:'Nippon India Banking Fund',    category:'Sectoral',   amc:'Nippon India',    schemeCode:118965, returns:{'1y':24.6,'3y':19.8,'5y':16.5}, risk:'High',           minSIP:1000, rating:4, aum:'₹8,940 Cr',  expenseRatio:0.82, nav:64.20,  description:'Banking and financial services sector fund.'},
+  {id:15,name:'ICICI Pru Technology Fund',   category:'Sectoral',   amc:'ICICI Prudential',schemeCode:120620, returns:{'1y':32.4,'3y':22.8,'5y':28.6}, risk:'Very High',      minSIP:1000, rating:4, aum:'₹12,450 Cr', expenseRatio:0.93, nav:195.60, description:'IT sector fund with global Nasdaq exposure.'},
+];
+
+const SEASON_MAP  = {1:['ELSS','Large Cap'],2:['ELSS','Large Cap'],3:['ELSS','Flexi Cap'],4:['Large Cap','Flexi Cap'],5:['Large Cap','Debt'],6:['Flexi Cap','Large Cap'],7:['Mid Cap','Small Cap'],8:['Mid Cap','Small Cap'],9:['Mid Cap','Flexi Cap'],10:['Flexi Cap','Debt'],11:['Flexi Cap','Debt'],12:['Debt','Large Cap']};
+const SEASON_LABEL= {1:'Tax Saving Season',2:'Tax Saving Season',3:'ELSS Deadline',4:'Post-Budget Stability',5:'Pre-Monsoon Caution',6:'Mid-Year Balance',7:'Growth Season',8:'Earnings Momentum',9:'Q2 Results Season',10:'Year-End Balancing',11:'Conservative Phase',12:'Year-End Parking'};
+const MONTHS      = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+
+// ── GOLD ETF DATA ─────────────────────────────────────────────────────────────
+const GOLD_ETFS = [
+  {id:'GOLDBEES',    name:'Nippon India Gold BeES',      symbol:'GOLDBEES',    yfSymbol:'GOLDBEES.NS',    amc:'Nippon India',     basePrice:88.52, expense:0.82, aum:'₹9,840 Cr'},
+  {id:'HDFCMFGETF',  name:'HDFC Gold ETF',               symbol:'HDFCMFGETF',  yfSymbol:'HDFCMFGETF.NS',  amc:'HDFC',             basePrice:87.95, expense:0.59, aum:'₹3,120 Cr'},
+  {id:'SBIGETS',     name:'SBI Gold ETF',                symbol:'SBIGETS',     yfSymbol:'SBIGETS.NS',     amc:'SBI',              basePrice:89.20, expense:0.65, aum:'₹2,760 Cr'},
+  {id:'IPGETF',      name:'ICICI Prudential Gold ETF',   symbol:'IPGETF',      yfSymbol:'IPGETF.NS',      amc:'ICICI Prudential', basePrice:88.80, expense:0.50, aum:'₹2,340 Cr'},
+  {id:'KOTAKGOLD',   name:'Kotak Gold ETF',              symbol:'KOTAKGOLD',   yfSymbol:'KOTAKGOLD.NS',   amc:'Kotak',            basePrice:88.10, expense:0.55, aum:'₹1,980 Cr'},
+];
+
+// Mock fallback for gold price
+const mockGoldPrice = etf => {
+  const d=new Date(),s=d.getFullYear()*10000+(d.getMonth()+1)*100+d.getDate(),
+        c=etf.id.split('').reduce((a,x)=>a+x.charCodeAt(0),0),
+        x=Math.sin((s+c)*9301+49297)*233280;
+  return parseFloat((etf.basePrice*(1+((x-Math.floor(x))-0.5)*3/100)).toFixed(2));
+};
+
+// ── STOCK DATA ────────────────────────────────────────────────────────────────
+const STOCKS = [
+  {id:1, symbol:'RELIANCE',   yfSymbol:'RELIANCE.NS',   name:'Reliance Industries',    sector:'Energy',         currentPrice:2842, targetPrice:3100, stopLoss:2700, holdingPeriod:'2-3 wks', momentum:'Bullish', rationale:'Jio growth + retail expansion. Breakout above 200 DMA.',      change:1.8,  upside:9.1},
+  {id:2, symbol:'TATAMOTORS', yfSymbol:'TATAMOTORS.NS', name:'Tata Motors Ltd',         sector:'Automobiles',    currentPrice:895,  targetPrice:980,  stopLoss:850,  holdingPeriod:'2-4 wks', momentum:'Bullish', rationale:'JLR margin improvement + EV portfolio. Volume breakout.',      change:2.3,  upside:9.5},
+  {id:3, symbol:'HDFCBANK',   yfSymbol:'HDFCBANK.NS',   name:'HDFC Bank Ltd',           sector:'Banking',        currentPrice:1872, targetPrice:2050, stopLoss:1780, holdingPeriod:'3-4 wks', momentum:'Neutral', rationale:'Attractive valuation. NIM recovery expected.',                change:0.5,  upside:9.5},
+  {id:4, symbol:'INFY',       yfSymbol:'INFY.NS',       name:'Infosys Ltd',             sector:'IT',             currentPrice:1748, targetPrice:1920, stopLoss:1660, holdingPeriod:'2-3 wks', momentum:'Bullish', rationale:'Strong deal wins + AI services ramp. Q4 positive.',           change:1.2,  upside:9.8},
+  {id:5, symbol:'SUNPHARMA',  yfSymbol:'SUNPHARMA.NS',  name:'Sun Pharma Industries',   sector:'Pharma',         currentPrice:1654, targetPrice:1820, stopLoss:1570, holdingPeriod:'3-4 wks', momentum:'Bullish', rationale:'US specialty growth. Recent FDA approval.',                   change:1.9,  upside:10.0},
+  {id:6, symbol:'BAJFINANCE', yfSymbol:'BAJFINANCE.NS', name:'Bajaj Finance Ltd',       sector:'NBFC',           currentPrice:8240, targetPrice:9000, stopLoss:7800, holdingPeriod:'2-3 wks', momentum:'Bullish', rationale:'AUM growth + stable credit. Breakout from consolidation.',    change:2.1,  upside:9.2},
+  {id:7, symbol:'ICICIBANK',  yfSymbol:'ICICIBANK.NS',  name:'ICICI Bank Ltd',          sector:'Banking',        currentPrice:1248, targetPrice:1380, stopLoss:1180, holdingPeriod:'2-3 wks', momentum:'Bullish', rationale:'Best-in-class ROE. Consistent earnings growth.',              change:1.6,  upside:10.6},
+  {id:8, symbol:'MARUTI',     yfSymbol:'MARUTI.NS',     name:'Maruti Suzuki India',     sector:'Automobiles',    currentPrice:12450,targetPrice:13500,stopLoss:11900,holdingPeriod:'3-4 wks', momentum:'Neutral', rationale:'Rural demand recovery + new models.',                         change:0.8,  upside:8.4},
+  {id:9, symbol:'WIPRO',      yfSymbol:'WIPRO.NS',      name:'Wipro Ltd',               sector:'IT',             currentPrice:548,  targetPrice:615,  stopLoss:518,  holdingPeriod:'2-3 wks', momentum:'Bullish', rationale:'AI integration + BFSI strength. RSI recovery.',              change:1.4,  upside:12.2},
+  {id:10,symbol:'TATASTEEL',  yfSymbol:'TATASTEEL.NS',  name:'Tata Steel Ltd',          sector:'Metals',         currentPrice:168,  targetPrice:190,  stopLoss:158,  holdingPeriod:'1-2 wks', momentum:'Bullish', rationale:'Steel prices firming. Infra demand boost.',                  change:3.2,  upside:13.1},
+  {id:11,symbol:'LTIM',       yfSymbol:'LTIM.NS',       name:'LTIMindtree Ltd',         sector:'IT',             currentPrice:5240, targetPrice:5750, stopLoss:4980, holdingPeriod:'2-3 wks', momentum:'Bullish', rationale:'Strong BFSI + healthcare deal pipeline.',                    change:1.8,  upside:9.7},
+  {id:12,symbol:'ADANIPORTS', yfSymbol:'ADANIPORTS.NS', name:'Adani Ports & SEZ',       sector:'Infrastructure', currentPrice:1380, targetPrice:1520, stopLoss:1310, holdingPeriod:'2-4 wks', momentum:'Bullish', rationale:'Cargo volume growth + port acquisitions.',                   change:2.4,  upside:10.1},
+  {id:13,symbol:'DRREDDY',    yfSymbol:'DRREDDY.NS',    name:"Dr. Reddy's Labs",        sector:'Pharma',         currentPrice:6840, targetPrice:7500, stopLoss:6490, holdingPeriod:'3-4 wks', momentum:'Neutral', rationale:'Biosimilar launches in US. EU expansion.',                   change:0.6,  upside:9.6},
+  {id:14,symbol:'HINDUNILVR', yfSymbol:'HINDUNILVR.NS', name:'Hindustan Unilever',      sector:'FMCG',           currentPrice:2348, targetPrice:2580, stopLoss:2230, holdingPeriod:'3-4 wks', momentum:'Neutral', rationale:'Rural consumption + premiumization trend.',                  change:0.9,  upside:9.9},
+  {id:15,symbol:'COALINDIA',  yfSymbol:'COALINDIA.NS',  name:'Coal India Ltd',          sector:'Energy',         currentPrice:485,  targetPrice:540,  stopLoss:460,  holdingPeriod:'1-2 wks', momentum:'Bullish', rationale:'High dividend yield. Volume at multi-year high.',            change:2.8,  upside:11.3},
+  {id:16,symbol:'ZOMATO',     yfSymbol:'ZOMATO.NS',     name:'Zomato Ltd',              sector:'Consumer Tech',  currentPrice:248,  targetPrice:290,  stopLoss:228,  holdingPeriod:'2-3 wks', momentum:'Bullish', rationale:'Blinkit quick commerce driving growth.',                      change:3.5,  upside:16.9},
+  {id:17,symbol:'TECHM',      yfSymbol:'TECHM.NS',      name:'Tech Mahindra Ltd',       sector:'IT',             currentPrice:1542, targetPrice:1720, stopLoss:1460, holdingPeriod:'3-4 wks', momentum:'Bullish', rationale:'Telecom vertical revival + cost optimisation.',              change:2.0,  upside:11.5},
+  {id:18,symbol:'POWERGRID',  yfSymbol:'POWERGRID.NS',  name:'Power Grid Corp',         sector:'Utilities',      currentPrice:342,  targetPrice:380,  stopLoss:325,  holdingPeriod:'2-4 wks', momentum:'Neutral', rationale:'Strong order book + govt capex in transmission.',           change:0.7,  upside:11.1},
+  {id:19,symbol:'MUTHOOTFIN', yfSymbol:'MUTHOOTFIN.NS', name:'Muthoot Finance',         sector:'NBFC',           currentPrice:1842, targetPrice:2050, stopLoss:1750, holdingPeriod:'2-3 wks', momentum:'Bullish', rationale:'Gold loan demand high. Rising gold improves LTV.',           change:2.6,  upside:11.3},
+  {id:20,symbol:'IRCTC',      yfSymbol:'IRCTC.NS',      name:'IRCTC Ltd',               sector:'Travel',         currentPrice:948,  targetPrice:1080, stopLoss:895,  holdingPeriod:'1-2 wks', momentum:'Bullish', rationale:'Railway tourism boost. Ticketing at record high.',           change:1.5,  upside:13.9},
+];
+
+// ── LIVE DATA FETCH ───────────────────────────────────────────────────────────
+// Fetch single NSE symbol via Yahoo Finance v8 chart (through corsproxy.io)
+async function fetchYahooSymbol(sym) {
+  const url = `https://corsproxy.io/?https://query1.finance.yahoo.com/v8/finance/chart/${sym}?interval=1d&range=1d`;
+  try {
+    const r = await fetch(url, {signal: AbortSignal.timeout(10000)});
+    if (!r.ok) return null;
+    const d = await r.json();
+    const meta = d?.chart?.result?.[0]?.meta;
+    if (!meta?.regularMarketPrice) return null;
+    const price    = meta.regularMarketPrice;
+    const prevClose= meta.chartPreviousClose || meta.previousClose || price;
+    const changePct= prevClose ? ((price - prevClose) / prevClose * 100) : 0;
+    return {
+      symbol:    sym,
+      price,
+      prevClose,
+      changePct,
+      change:    price - prevClose,
+      open:      meta.regularMarketOpen,
+      high:      meta.regularMarketDayHigh,
+      low:       meta.regularMarketDayLow,
+      volume:    meta.regularMarketVolume,
+      name:      meta.shortName,
+    };
+  } catch { return null; }
+}
+
+// Fetch all symbols in parallel
+async function fetchYahooBatch(symbols) {
+  const results = await Promise.all(symbols.map(fetchYahooSymbol));
+  const map = {};
+  results.forEach(r => { if (r) map[r.symbol] = r; });
+  return map;
+}
+
+// Fetch ALL mutual fund NAVs in one shot from AMFI (via corsproxy)
+async function fetchAMFINavs(schemeCodes) {
+  try {
+    const r = await fetch(
+      'https://corsproxy.io/?https://www.amfiindia.com/spages/NAVAll.txt',
+      {signal: AbortSignal.timeout(20000)}
+    );
+    if (!r.ok) return {};
+    const text  = await r.text();
+    const codes = new Set(schemeCodes.map(String));
+    const map   = {};
+    text.split('\n').forEach(line => {
+      const p = line.split(';');
+      if (p.length >= 5 && codes.has(p[0].trim())) {
+        const nav = parseFloat(p[4].trim());
+        if (!isNaN(nav)) map[parseInt(p[0].trim())] = nav;
+      }
+    });
+    return map;
+  } catch { return {}; }
+}
+
+// ── STORE ────────────────────────────────────────────────────────────────────
+const Ctx = createContext();
+
+function useLS(key, init) {
+  const [v, set] = useState(() => { try { const s=localStorage.getItem(key); return s?JSON.parse(s):init; } catch { return init; } });
+  const save = val => { const nv=typeof val==='function'?val(v):val; set(nv); localStorage.setItem(key,JSON.stringify(nv)); };
+  return [v, save];
+}
+
+function StoreProvider({children}) {
+  const [sipInvs,  setSip]   = useLS('fm_sip',   []);
+  const [goldInvs, setGold]  = useLS('fm_gold',  []);
+  const [stockInvs,setStock] = useLS('fm_stock', []);
+  const [thresholds,setThresh]= useLS('fm_thresh',{});
+
+  // Live data state
+  const [liveP,   setLiveP]   = useState({});           // {yfSymbol: {price,change,...}}
+  const [liveNav, setLiveNav] = useState({});           // {fundId: navValue}
+  const [liveStatus, setLiveStatus] = useState('loading'); // 'loading'|'live'|'error'
+  const [lastUpdated, setLastUpdated] = useState(null);
+
+  const fetchAll = useCallback(async () => {
+    setLiveStatus('loading');
+    const stockSymbols = STOCKS.map(s=>s.yfSymbol);
+    const etfSymbols   = GOLD_ETFS.map(e=>e.yfSymbol);
+    const allSymbols   = [...stockSymbols, ...etfSymbols];
+    const schemeCodes  = SIP_FUNDS.map(f=>f.schemeCode);
+
+    // Fetch prices and NAVs in parallel
+    const [priceMap, schemeNavMap] = await Promise.all([
+      fetchYahooBatch(allSymbols),
+      fetchAMFINavs(schemeCodes),
+    ]);
+    setLiveP(priceMap);
+
+    // Map scheme code → fund id
+    const navMap = {};
+    SIP_FUNDS.forEach(f => {
+      if (schemeNavMap[f.schemeCode]) navMap[f.id] = schemeNavMap[f.schemeCode];
+    });
+    setLiveNav(navMap);
+
+    const success = Object.keys(priceMap).length > 0 || Object.keys(navMap).length > 0;
+    setLiveStatus(success ? 'live' : 'error');
+    setLastUpdated(new Date());
+  }, []);
+
+  useEffect(() => {
+    fetchAll();
+    const t = setInterval(fetchAll, 30 * 60 * 1000);
+    return () => clearInterval(t);
+  }, [fetchAll]);
+
+  // ── Helper: get live stock data (with fallback to static)
+  const getLiveStock = s => {
+    const q = liveP[s.yfSymbol];
+    if (!q || !q.price) return s;
+    const price  = q.price;
+    const upside = price > 0 ? ((s.targetPrice - price)/price*100).toFixed(1) : s.upside;
+    return { ...s, currentPrice: price, change: q.changePct?.toFixed(2) ?? s.change, upside: parseFloat(upside) };
+  };
+
+  // ── Helper: get live ETF price
+  const getEtfPrice = etf => liveP[etf.yfSymbol]?.price || mockGoldPrice(etf);
+  const getEtfChange = etf => {
+    const q = liveP[etf.yfSymbol];
+    if (q && q.price && q.prevClose) return ((q.price - q.prevClose)/q.prevClose*100).toFixed(2);
+    return null;
+  };
+
+  // ── Helper: get live NAV for fund
+  const getFundNav = f => liveNav[f.id] || f.nav;
+
+  // ── Valuation functions using live data
+  const sipVal = i => {
+    const f = SIP_FUNDS.find(f=>f.id===i.fundId);
+    if (!f) return i.amount;
+    const nav = liveNav[f.id];
+    if (nav && i.units) return parseFloat((i.units * nav).toFixed(2));
+    const d = (Date.now()-new Date(i.date))/864e5;
+    return parseFloat((i.amount*Math.pow(1+(f.returns['3y']||12)/100, d/365)).toFixed(2));
+  };
+
+  const goldVal = i => {
+    const e = GOLD_ETFS.find(e=>e.id===i.etfId);
+    if (!e) return i.amount;
+    const price = getEtfPrice(e);
+    return parseFloat((i.units * price).toFixed(2));
+  };
+
+  const stockVal = i => {
+    const s = STOCKS.find(s=>s.id===i.stockId);
+    const price = (s && liveP[s.yfSymbol]?.price) || i.buyPrice;
+    return parseFloat((price * i.quantity).toFixed(2));
+  };
+
+  const addSIP   = i => setSip(p=>[...p,{...i,id:Date.now()}]);
+  const addGold  = i => setGold(p=>[...p,{...i,id:Date.now()}]);
+  const addStock = i => setStock(p=>[...p,{...i,id:Date.now()}]);
+  const removeSIP   = id => setSip(p=>p.filter(i=>i.id!==id));
+  const removeGold  = id => setGold(p=>p.filter(i=>i.id!==id));
+  const removeStock = id => setStock(p=>p.filter(i=>i.id!==id));
+  const setThreshold   = (eid,v) => setThresh(p=>({...p,[eid]:parseFloat(v)}));
+  const clearThreshold = eid     => setThresh(p=>{ const n={...p}; delete n[eid]; return n; });
+
+  const sipTotal  = sipInvs.reduce((s,i)=>s+i.amount,0);
+  const goldTotal = goldInvs.reduce((s,i)=>s+i.amount,0);
+  const stockTotal= stockInvs.reduce((s,i)=>s+i.amount,0);
+  const sipCur    = sipInvs.reduce((s,i)=>s+sipVal(i),0);
+  const goldCur   = goldInvs.reduce((s,i)=>s+goldVal(i),0);
+  const stockCur  = stockInvs.reduce((s,i)=>s+stockVal(i),0);
+  const totalInv  = sipTotal+goldTotal+stockTotal;
+  const totalCur  = sipCur+goldCur+stockCur;
+  const pnl       = totalCur-totalInv;
+  const pnlPct    = totalInv>0 ? (pnl/totalInv)*100 : 0;
+
+  const alerts = GOLD_ETFS.flatMap(e => {
+    const t=thresholds[e.id]; if (t===undefined) return [];
+    const p=getEtfPrice(e);
+    return p<=t ? [{etfId:e.id,etfName:e.name,symbol:e.symbol,currentPrice:p,threshold:t}] : [];
+  });
+
+  return (
+    <Ctx.Provider value={{
+      sipInvs,goldInvs,stockInvs,thresholds,
+      addSIP,addGold,addStock,removeSIP,removeGold,removeStock,setThreshold,clearThreshold,
+      sipVal,goldVal,stockVal,getLiveStock,getEtfPrice,getEtfChange,getFundNav,
+      sipTotal,goldTotal,stockTotal,sipCur,goldCur,stockCur,totalInv,totalCur,pnl,pnlPct,
+      alerts,liveStatus,lastUpdated,fetchAll,liveP,liveNav,
+    }}>
+      {children}
+    </Ctx.Provider>
+  );
+}
+const useStore = () => useContext(Ctx);
+
+// ── UI HELPERS ────────────────────────────────────────────────────────────────
+const riskColor = r => ({Low:'bg-green-100 text-green-700',Moderate:'bg-blue-100 text-blue-700','Moderate-High':'bg-yellow-100 text-yellow-700',High:'bg-orange-100 text-orange-700','Very High':'bg-red-100 text-red-700'}[r]||'bg-slate-100 text-slate-700');
+const momColor  = m => m==='Bullish'?'bg-green-100 text-green-700':m==='Bearish'?'bg-red-100 text-red-700':'bg-yellow-100 text-yellow-700';
+
+function LiveBadge() {
+  const {liveStatus, lastUpdated, fetchAll} = useStore();
+  const [countdown, setCountdown] = useState('');
+
+  useEffect(() => {
+    if (!lastUpdated || liveStatus !== 'live') { setCountdown(''); return; }
+    const tick = () => {
+      const elapsed = Math.floor((Date.now() - new Date(lastUpdated)) / 1000);
+      const remaining = 30 * 60 - elapsed;
+      if (remaining <= 0) { setCountdown('updating…'); return; }
+      const m = Math.floor(remaining / 60);
+      const s = remaining % 60;
+      setCountdown(`next in ${m}:${String(s).padStart(2,'0')}`);
+    };
+    tick();
+    const t = setInterval(tick, 1000);
+    return () => clearInterval(t);
+  }, [lastUpdated, liveStatus]);
+
+  return (
+    <div className="flex items-center gap-2">
+      {liveStatus==='loading' && (
+        <span className="flex items-center gap-1.5 text-xs text-amber-600 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-full">
+          <span className="live-pulse inline-block w-1.5 h-1.5 rounded-full bg-amber-400"></span>Fetching live data…
+        </span>
+      )}
+      {liveStatus==='live' && (
+        <span className="flex items-center gap-1.5 text-xs text-green-700 bg-green-50 border border-green-200 px-2.5 py-1 rounded-full">
+          <span className="inline-block w-1.5 h-1.5 rounded-full bg-green-500"></span>
+          Live · {fmtTime(lastUpdated)}&nbsp;·&nbsp;<span className="text-green-600 opacity-70">{countdown}</span>
+        </span>
+      )}
+      {liveStatus==='error' && (
+        <span className="flex items-center gap-1.5 text-xs text-red-600 bg-red-50 border border-red-200 px-2.5 py-1 rounded-full">
+          <span className="inline-block w-1.5 h-1.5 rounded-full bg-red-400"></span>Offline prices
+        </span>
+      )}
+      <button onClick={fetchAll} title="Refresh now" className="text-slate-400 hover:text-blue-500 text-base leading-none" style={{lineHeight:1}}>↻</button>
+    </div>
+  );
+}
+
+function Modal({title,sub,onClose,children}){
+  return(
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={e=>e.target===e.currentTarget&&onClose()}>
+      <div className="bg-white rounded-2xl w-full max-w-md mx-4 shadow-2xl">
+        <div className="p-5 border-b border-slate-100 flex items-start justify-between">
+          <div><div className="font-bold text-slate-800">{title}</div>{sub&&<div className="text-xs text-slate-500 mt-0.5">{sub}</div>}</div>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 text-2xl leading-none ml-4">×</button>
+        </div>
+        <div className="p-5">{children}</div>
+      </div>
+    </div>
+  );
+}
+
+function PnLCell({amount,cur}){
+  const p=cur-amount, pct=amount>0?(p/amount)*100:0;
+  return(
+    <div className={p>=0?'text-green-600':'text-red-600'}>
+      <div className="text-sm font-semibold">{p>=0?'+':''}{fmt(p)}</div>
+      <div className="text-xs">({p>=0?'+':''}{pct.toFixed(2)}%)</div>
+    </div>
+  );
+}
+
+function AlertBanner({alerts}){
+  if(!alerts||!alerts.length) return null;
+  return(
+    <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-5">
+      <div className="flex items-center gap-2 mb-1"><span>⚡</span><span className="font-semibold text-amber-800">Buy Alert — {alerts.length} ETF at/below your threshold</span></div>
+      {alerts.map(a=>(
+        <div key={a.etfId} className="text-sm text-amber-700 flex flex-wrap items-center gap-2">
+          <strong>[{a.symbol}]</strong><span>Current ₹{a.currentPrice}</span><span>≤ Threshold ₹{a.threshold}</span>
+          <span className="bg-amber-200 text-amber-900 text-xs px-2 py-0.5 rounded-full font-bold">BUY NOW</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function Sidebar({page,setPage}){
+  const nav=[{id:'dashboard',label:'Dashboard',icon:'🏠'},{id:'sip',label:'SIP Manager',icon:'📈'},{id:'gold',label:'Gold ETF',icon:'🥇'},{id:'stocks',label:'Stock Picker',icon:'📊'},{id:'portfolio',label:'Portfolio',icon:'💼'}];
+  return(
+    <aside className="w-56 bg-slate-900 flex flex-col h-screen shrink-0">
+      <div className="px-4 py-4 border-b border-slate-700">
+        <div className="flex items-center gap-2">
+          <div className="w-8 h-8 bg-blue-500 rounded-lg flex items-center justify-center text-white font-bold text-sm">₹</div>
+          <div><div className="text-white font-bold text-sm">Finance Manager</div><div className="text-slate-400 text-xs">Smart Tracker</div></div>
+        </div>
+      </div>
+      <nav className="flex-1 px-3 py-3 space-y-1 overflow-y-auto">
+        {nav.map(n=>(
+          <button key={n.id} onClick={()=>setPage(n.id)} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${page===n.id?'bg-blue-500 text-white':'text-slate-400 hover:bg-slate-800 hover:text-white'}`}>
+            <span>{n.icon}</span>{n.label}
+          </button>
+        ))}
+      </nav>
+      <div className="px-4 py-3 border-t border-slate-700 text-xs text-slate-500 text-center">For reference only</div>
+    </aside>
+  );
+}
+
+// ── DASHBOARD ─────────────────────────────────────────────────────────────────
+function Dashboard({setPage}){
+  const {sipInvs,goldInvs,stockInvs,sipTotal,goldTotal,stockTotal,sipCur,goldCur,stockCur,totalInv,totalCur,pnl,pnlPct,alerts} = useStore();
+
+  const pieData = [{name:'SIP',value:sipCur},{name:'Gold ETF',value:goldCur},{name:'Stocks',value:stockCur}].filter(d=>d.value>0);
+  const PIE = ['#3b82f6','#f59e0b','#10b981'];
+
+  const monthly = useMemo(()=>{
+    const today=new Date();
+    return Array.from({length:12},(_,i)=>{
+      const d=new Date(today.getFullYear(),today.getMonth()-(11-i),1);
+      const all=[...sipInvs.map(v=>({...v,g:0.18})),...goldInvs.map(v=>({...v,g:0.12})),...stockInvs.map(v=>({...v,g:0.22}))];
+      const inv=all.filter(v=>new Date(v.date)<=d).reduce((s,v)=>s+v.amount,0);
+      const val=all.filter(v=>new Date(v.date)<=d).reduce((s,v)=>{const dy=(d-new Date(v.date))/864e5;return s+v.amount*Math.pow(1+v.g,dy/365);},0);
+      return {month:d.toLocaleDateString('en-IN',{month:'short',year:'2-digit'}),invested:Math.round(inv),value:Math.round(val)};
+    });
+  },[sipInvs,goldInvs,stockInvs]);
+
+  const cards = [
+    {title:'Total Invested',  value:fmt(totalInv),                     sub:'All categories', icon:'💰', cls:'bg-blue-50 text-blue-600'},
+    {title:'Current Value',   value:fmt(totalCur),                     sub:'Market value',   icon:'📈', cls:'bg-indigo-50 text-indigo-600'},
+    {title:'Total P&L',       value:`${pnl>=0?'+':''}${fmt(pnl)}`,     sub:`${pnlPct>=0?'+':''}${pnlPct.toFixed(2)}%`, icon:pnl>=0?'🟢':'🔴', cls:pnl>=0?'bg-green-50 text-green-600':'bg-red-50 text-red-600', trend:pnlPct},
+    {title:'Investments',     value:sipInvs.length+goldInvs.length+stockInvs.length, sub:`${sipInvs.length} SIP · ${goldInvs.length} Gold · ${stockInvs.length} Stocks`, icon:'📦', cls:'bg-purple-50 text-purple-600'},
+  ];
+
+  return(
+    <div className="p-6 max-w-7xl mx-auto">
+      <div className="mb-5 flex items-start justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-800">Portfolio Dashboard</h1>
+          <p className="text-slate-500 text-sm">{new Date().toLocaleDateString('en-IN',{weekday:'long',year:'numeric',month:'long',day:'numeric'})}</p>
+        </div>
+        <LiveBadge/>
+      </div>
+
+      <AlertBanner alerts={alerts}/>
+
+      <div className="grid grid-cols-4 gap-4 mb-5">
+        {cards.map(c=>(
+          <div key={c.title} className="bg-white rounded-xl p-5 shadow-sm border border-slate-100">
+            <div className="flex items-start justify-between mb-3">
+              <div className={`w-10 h-10 rounded-lg flex items-center justify-center text-lg ${c.cls}`}>{c.icon}</div>
+              {c.trend!==undefined&&<span className={`text-xs font-semibold px-2 py-1 rounded-full ${c.trend>=0?'bg-green-50 text-green-600':'bg-red-50 text-red-600'}`}>{c.trend>=0?'+':''}{c.trend.toFixed(2)}%</span>}
+            </div>
+            <div className="text-xl font-bold text-slate-800">{c.value}</div>
+            <div className="text-sm text-slate-500">{c.title}</div>
+            <div className="text-xs text-slate-400">{c.sub}</div>
+          </div>
+        ))}
+      </div>
+
+      {totalInv>0&&(
+        <div className="grid grid-cols-3 gap-4 mb-5">
+          <div className="col-span-2 bg-white rounded-xl p-5 shadow-sm border border-slate-100">
+            <div className="text-sm font-semibold text-slate-700 mb-3">Portfolio Growth (12 Months)</div>
+            <ResponsiveContainer width="100%" height={200}>
+              <AreaChart data={monthly} margin={{top:5,right:10,left:0,bottom:0}}>
+                <defs>
+                  <linearGradient id="gv" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#3b82f6" stopOpacity={0.15}/><stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/></linearGradient>
+                  <linearGradient id="gi" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#10b981" stopOpacity={0.1}/><stop offset="95%" stopColor="#10b981" stopOpacity={0}/></linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9"/>
+                <XAxis dataKey="month" tick={{fontSize:11,fill:'#94a3b8'}}/>
+                <YAxis tickFormatter={v=>`₹${(v/1000).toFixed(0)}k`} tick={{fontSize:11,fill:'#94a3b8'}}/>
+                <RT formatter={v=>[fmt(v)]} contentStyle={{borderRadius:8,border:'1px solid #e2e8f0',fontSize:12}}/>
+                <Legend wrapperStyle={{fontSize:12}}/>
+                <Area type="monotone" dataKey="invested" name="Invested" stroke="#10b981" fill="url(#gi)" strokeWidth={2}/>
+                <Area type="monotone" dataKey="value" name="Current Value" stroke="#3b82f6" fill="url(#gv)" strokeWidth={2}/>
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+          <div className="bg-white rounded-xl p-5 shadow-sm border border-slate-100">
+            <div className="text-sm font-semibold text-slate-700 mb-3">Allocation</div>
+            <ResponsiveContainer width="100%" height={200}>
+              <PieChart>
+                <Pie data={pieData} cx="50%" cy="45%" outerRadius={70} dataKey="value" label={({percent})=>percent>0.05?`${(percent*100).toFixed(0)}%`:null} labelLine={false}>
+                  {pieData.map((_,i)=><Cell key={i} fill={PIE[i%3]}/>)}
+                </Pie>
+                <RT formatter={v=>[fmt(v)]} contentStyle={{borderRadius:8,fontSize:12}}/>
+                <Legend iconSize={10} wrapperStyle={{fontSize:12}}/>
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      )}
+
+      <div className="grid grid-cols-3 gap-4">
+        {[{label:'SIP Funds',inv:sipTotal,cur:sipCur,page:'sip',icon:'📈'},{label:'Gold ETF',inv:goldTotal,cur:goldCur,page:'gold',icon:'🥇'},{label:'Stocks',inv:stockTotal,cur:stockCur,page:'stocks',icon:'📊'}].map(c=>{
+          const p=c.cur-c.inv, pct=c.inv>0?(p/c.inv)*100:0;
+          return(
+            <div key={c.label} className="bg-white rounded-xl p-5 shadow-sm border border-slate-100">
+              <div className="flex items-center justify-between mb-2"><span className="text-2xl">{c.icon}</span><button onClick={()=>setPage(c.page)} className="text-xs text-blue-500 font-medium">View →</button></div>
+              <div className="font-semibold text-slate-700">{c.label}</div>
+              <div className="text-xl font-bold text-slate-800 mt-1">{fmt(c.cur)}</div>
+              <div className="flex items-center gap-2 mt-1">
+                <span className="text-xs text-slate-400">Invested: {fmt(c.inv)}</span>
+                {c.inv>0&&<span className={`text-xs font-medium ${p>=0?'text-green-600':'text-red-600'}`}>{p>=0?'+':''}{pct.toFixed(1)}%</span>}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {totalInv===0&&(
+        <div className="mt-6 text-center py-16 bg-white rounded-xl border border-slate-100 shadow-sm">
+          <div className="text-5xl mb-3">💼</div>
+          <div className="text-lg font-semibold text-slate-700 mb-2">Your portfolio is empty</div>
+          <p className="text-slate-500 text-sm mb-5">Add SIP funds, Gold ETFs or Stocks to get started.</p>
+          <div className="flex gap-3 justify-center">
+            <button onClick={()=>setPage('sip')} className="px-4 py-2 bg-blue-500 text-white rounded-lg text-sm font-medium hover:bg-blue-600">Start SIP</button>
+            <button onClick={()=>setPage('gold')} className="px-4 py-2 bg-amber-500 text-white rounded-lg text-sm font-medium hover:bg-amber-600">Gold ETF</button>
+            <button onClick={()=>setPage('stocks')} className="px-4 py-2 bg-green-500 text-white rounded-lg text-sm font-medium hover:bg-green-600">Pick Stocks</button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── SIP MANAGER ───────────────────────────────────────────────────────────────
+function FundCard({fund, onInvest}){
+  const {getFundNav, liveNav} = useStore();
+  const liveN = liveNav[fund.id];
+  const displayNav = liveN || fund.nav;
+  return(
+    <div className="bg-white rounded-xl border border-slate-100 shadow-sm hover:shadow-md transition-shadow p-4">
+      <div className="flex items-start justify-between mb-2">
+        <div><div className="font-semibold text-slate-800 text-sm leading-tight">{fund.name}</div><div className="text-xs text-slate-400">{fund.amc}</div></div>
+        <span className={`text-xs px-2 py-0.5 rounded-full font-medium shrink-0 ml-2 ${riskColor(fund.risk)}`}>{fund.risk}</span>
+      </div>
+      <p className="text-xs text-slate-500 mb-3 line-clamp-2">{fund.description}</p>
+      <div className="grid grid-cols-3 gap-1 mb-3">
+        {['1y','3y','5y'].map(p=>(
+          <div key={p} className="text-center bg-slate-50 rounded py-1.5">
+            <div className="text-sm font-bold text-green-600">{fund.returns[p]}%</div>
+            <div className="text-xs text-slate-400">{p}</div>
+          </div>
+        ))}
+      </div>
+      <div className="flex items-center justify-between text-xs text-slate-400 mb-3">
+        <span>{fund.aum}</span><span>{fund.expenseRatio}%</span><span>Min ₹{fund.minSIP}</span>
+      </div>
+      <div className="flex items-center justify-between">
+        <div className="flex flex-col">
+          <div className="flex gap-0.5 mb-0.5">{[1,2,3,4,5].map(s=><span key={s} className={`text-sm ${s<=fund.rating?'text-amber-400':'text-slate-200'}`}>★</span>)}</div>
+          <div className="flex items-center gap-1">
+            <span className="text-xs text-slate-500">NAV: <strong className="text-slate-700">₹{displayNav.toFixed(2)}</strong></span>
+            {liveN && <span className="text-xs text-green-600 font-medium">● Live</span>}
+          </div>
+        </div>
+        <button onClick={()=>onInvest({...fund, nav: displayNav})} className="text-xs bg-blue-500 hover:bg-blue-600 text-white px-3 py-1.5 rounded-lg font-medium">+ Add SIP</button>
+      </div>
+    </div>
+  );
+}
+
+function SIPManager(){
+  const [month, setMonth]  = useState(new Date().getMonth()+1);
+  const [filter,setFilter] = useState('All');
+  const [sel,   setSel]    = useState(null);
+  const [form,  setForm]   = useState({amount:'', date:new Date().toISOString().slice(0,10)});
+  const {addSIP, liveStatus} = useStore();
+
+  const cats        = ['All',...new Set(SIP_FUNDS.map(f=>f.category))];
+  const recommended = SIP_FUNDS.filter(f=>(SEASON_MAP[month]||[]).includes(f.category));
+  const allFunds    = filter==='All'?SIP_FUNDS:SIP_FUNDS.filter(f=>f.category===filter);
+
+  return(
+    <div className="p-6 max-w-7xl mx-auto">
+      <div className="mb-5 flex items-start justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-800">SIP Manager</h1>
+          <p className="text-slate-500 text-sm">Monthly fund suggestions · Live NAV from AMFI via mfapi.in</p>
+        </div>
+        <LiveBadge/>
+      </div>
+
+      <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-4 mb-5">
+        <div className="text-sm font-medium text-slate-700 mb-2">Select Month for Recommendations</div>
+        <div className="flex flex-wrap gap-1.5 mb-3">
+          {MONTHS.map((m,i)=><button key={m} onClick={()=>setMonth(i+1)} className={`px-3 py-1 rounded-lg text-xs font-medium ${month===i+1?'bg-blue-500 text-white':'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>{m.slice(0,3)}</button>)}
+        </div>
+        <div className="bg-blue-50 rounded-lg px-4 py-2 text-sm"><span className="font-semibold text-blue-800">{MONTHS[month-1]}</span><span className="text-blue-600 ml-2">— {SEASON_LABEL[month]}</span></div>
+      </div>
+
+      <div className="mb-5">
+        <div className="flex items-center gap-2 mb-3">
+          <h2 className="text-base font-semibold text-slate-700">Top Picks for {MONTHS[month-1]}</h2>
+          <span className="bg-blue-100 text-blue-700 text-xs px-2 py-0.5 rounded-full">{recommended.length} funds</span>
+        </div>
+        <div className="grid grid-cols-3 gap-4">{recommended.map(f=><FundCard key={f.id} fund={f} onInvest={setSel}/>)}</div>
+      </div>
+
+      <div>
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-base font-semibold text-slate-700">All Funds</h2>
+          <div className="flex gap-1.5">{cats.map(c=><button key={c} onClick={()=>setFilter(c)} className={`px-3 py-1 rounded-lg text-xs font-medium ${filter===c?'bg-slate-800 text-white':'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>{c}</button>)}</div>
+        </div>
+        <div className="grid grid-cols-3 gap-4">{allFunds.map(f=><FundCard key={f.id} fund={f} onInvest={setSel}/>)}</div>
+      </div>
+
+      {sel&&(
+        <Modal title="Add SIP Investment" sub={sel.name} onClose={()=>setSel(null)}>
+          <form onSubmit={e=>{e.preventDefault();addSIP({fundId:sel.id,fundName:sel.name,category:sel.category,amount:parseFloat(form.amount),date:form.date,buyNAV:sel.nav,units:parseFloat((form.amount/sel.nav).toFixed(3))});setSel(null);}} className="space-y-4">
+            <div><label className="block text-sm font-medium text-slate-700 mb-1">Monthly SIP Amount (₹)</label>
+              <input type="number" value={form.amount} onChange={e=>setForm({...form,amount:e.target.value})} min={sel.minSIP} step={500} className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" required/>
+              <p className="text-xs text-slate-400 mt-1">Minimum ₹{sel.minSIP}</p></div>
+            <div><label className="block text-sm font-medium text-slate-700 mb-1">Start Date</label>
+              <input type="date" value={form.date} onChange={e=>setForm({...form,date:e.target.value})} className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" required/></div>
+            <div className="bg-slate-50 rounded-lg p-3 text-xs space-y-1">
+              <div className="flex justify-between"><span>Current NAV (Live)</span><span className="font-medium text-green-700">₹{sel.nav.toFixed(4)}</span></div>
+              <div className="flex justify-between"><span>Units to allocate</span><span className="font-medium">{form.amount?(form.amount/sel.nav).toFixed(3):'—'}</span></div>
+            </div>
+            <div className="flex gap-3"><button type="button" onClick={()=>setSel(null)} className="flex-1 border border-slate-200 text-slate-600 rounded-lg py-2 text-sm">Cancel</button><button type="submit" className="flex-1 bg-blue-500 text-white rounded-lg py-2 text-sm font-medium hover:bg-blue-600">Confirm SIP</button></div>
+          </form>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+// ── GOLD ETF ──────────────────────────────────────────────────────────────────
+function GoldETF(){
+  const [tModal, setTModal] = useState(null);
+  const [bModal, setBModal] = useState(null);
+  const [tv, setTv]         = useState('');
+  const [bf, setBf]         = useState({qty:'10', date:new Date().toISOString().slice(0,10)});
+  const {thresholds,setThreshold,clearThreshold,addGold,alerts,getEtfPrice,getEtfChange,liveStatus,liveP} = useStore();
+
+  return(
+    <div className="p-6 max-w-5xl mx-auto">
+      <div className="mb-5 flex items-start justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-800">Gold ETF Tracker</h1>
+          <p className="text-slate-500 text-sm">Real-time NSE prices via Yahoo Finance</p>
+        </div>
+        <LiveBadge/>
+      </div>
+
+      <AlertBanner alerts={alerts}/>
+
+      <div className="bg-gradient-to-r from-amber-50 to-yellow-50 border border-amber-100 rounded-xl p-4 mb-5 flex items-center gap-3">
+        <span className="text-3xl">🥇</span>
+        <div className="text-sm text-amber-800"><strong>Why Gold ETFs?</strong> Pure gold exposure, no storage cost. 1 unit ≈ 1/100 gram of gold. Keep 5-10% of portfolio in gold for inflation hedge.</div>
+      </div>
+
+      <div className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden mb-5">
+        <div className="p-4 border-b border-slate-100 flex items-center justify-between">
+          <span className="text-sm font-semibold text-slate-700">Top Gold ETFs — NSE (Live Prices)</span>
+          {liveStatus==='loading' && <span className="text-xs text-amber-500 live-pulse">Fetching prices…</span>}
+          {liveStatus==='error'   && <span className="text-xs text-red-400">Using reference prices</span>}
+        </div>
+        <table className="w-full">
+          <thead className="bg-slate-50 text-xs text-slate-500 uppercase">
+            <tr><th className="px-4 py-2.5 text-left">ETF</th><th className="px-4 py-2.5 text-right">Price</th><th className="px-4 py-2.5 text-right">Change</th><th className="px-4 py-2.5 text-right">Prev Close</th><th className="px-4 py-2.5 text-right">AUM</th><th className="px-4 py-2.5 text-right">Exp%</th><th className="px-4 py-2.5 text-right">Threshold</th><th className="px-4 py-2.5 text-center">Actions</th></tr>
+          </thead>
+          <tbody className="divide-y divide-slate-50">
+            {GOLD_ETFS.map(etf=>{
+              const cur      = getEtfPrice(etf);
+              const chgPct   = getEtfChange(etf);
+              const liveQ    = liveP[etf.yfSymbol];
+              const prevClose= liveQ?.prevClose;
+              const diff     = chgPct !== null ? parseFloat(chgPct) : ((cur-etf.basePrice)/etf.basePrice*100);
+              const up       = diff >= 0;
+              const thresh   = thresholds[etf.id];
+              const isAlert  = thresh!==undefined && cur<=thresh;
+              const isLive   = !!liveQ?.price;
+              return(
+                <tr key={etf.id} className={`hover:bg-slate-50 ${isAlert?'bg-amber-50':''}`}>
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-2">
+                      {isAlert && <span>⚡</span>}
+                      <div>
+                        <div className="font-medium text-slate-800 text-sm">{etf.symbol}</div>
+                        <div className="text-xs text-slate-400">{etf.amc}</div>
+                      </div>
+                      {isLive && <span className="text-xs text-green-600 font-semibold ml-1">●</span>}
+                    </div>
+                  </td>
+                  <td className="px-4 py-3 text-right font-bold text-slate-800">₹{cur.toFixed(2)}</td>
+                  <td className="px-4 py-3 text-right">
+                    <span className={`text-sm font-medium ${up?'text-green-600':'text-red-600'}`}>{up?'▲':'▼'} {Math.abs(diff).toFixed(2)}%</span>
+                  </td>
+                  <td className="px-4 py-3 text-right text-sm text-slate-500">{prevClose?`₹${prevClose.toFixed(2)}`:'—'}</td>
+                  <td className="px-4 py-3 text-right text-sm text-slate-500">{etf.aum}</td>
+                  <td className="px-4 py-3 text-right text-sm text-slate-500">{etf.expense}%</td>
+                  <td className="px-4 py-3 text-right">
+                    {thresh!==undefined
+                      ?<div className="flex items-center justify-end gap-1"><span className={`text-sm font-medium ${isAlert?'text-amber-600':'text-slate-600'}`}>₹{thresh}</span><button onClick={()=>clearThreshold(etf.id)} className="text-slate-300 hover:text-red-400 text-xs ml-1">✕</button></div>
+                      :<span className="text-xs text-slate-400">Not set</span>}
+                  </td>
+                  <td className="px-4 py-3 text-center">
+                    <div className="flex items-center justify-center gap-2">
+                      <button onClick={()=>{setTModal({etf,cur});setTv('');}} className="text-xs bg-amber-100 hover:bg-amber-200 text-amber-700 px-2.5 py-1 rounded-lg font-medium">Set Alert</button>
+                      <button onClick={()=>{setBModal({etf,cur});setBf({qty:'10',date:new Date().toISOString().slice(0,10)});}} className="text-xs bg-green-500 hover:bg-green-600 text-white px-2.5 py-1 rounded-lg font-medium">Buy</button>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 flex gap-3 text-sm text-blue-800">
+        <span className="shrink-0">💡</span>
+        <span><strong>Tip:</strong> Set threshold 2-5% below current price. Alert fires when gold drops to your level. Green ● = Live NSE price.</span>
+      </div>
+
+      {tModal&&(
+        <Modal title="Set Buy Threshold" sub={tModal.etf.name} onClose={()=>setTModal(null)}>
+          <form onSubmit={e=>{e.preventDefault();setThreshold(tModal.etf.id,tv);setTModal(null);}} className="space-y-4">
+            <div className="bg-slate-50 rounded-lg p-3 text-sm flex justify-between"><span>Current Price (Live)</span><strong className="text-green-700">₹{tModal.cur.toFixed(2)}</strong></div>
+            <div><label className="block text-sm font-medium text-slate-700 mb-1">Alert when price drops to (₹)</label>
+              <input type="number" value={tv} onChange={e=>setTv(e.target.value)} step="0.01" placeholder={`e.g. ${(tModal.cur*0.97).toFixed(2)}`} className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500" required/></div>
+            <div className="flex gap-3"><button type="button" onClick={()=>setTModal(null)} className="flex-1 border border-slate-200 text-slate-600 rounded-lg py-2 text-sm">Cancel</button><button type="submit" className="flex-1 bg-amber-500 text-white rounded-lg py-2 text-sm font-medium hover:bg-amber-600">Set Threshold</button></div>
+          </form>
+        </Modal>
+      )}
+
+      {bModal&&(
+        <Modal title="Buy Gold ETF" sub={`${bModal.etf.name} (${bModal.etf.symbol})`} onClose={()=>setBModal(null)}>
+          <form onSubmit={e=>{e.preventDefault();addGold({etfId:bModal.etf.id,etfName:bModal.etf.name,symbol:bModal.etf.symbol,units:parseFloat(bf.qty),buyPrice:bModal.cur,amount:parseFloat((bf.qty*bModal.cur).toFixed(2)),date:bf.date});setBModal(null);}} className="space-y-4">
+            <div><label className="block text-sm font-medium text-slate-700 mb-1">Units</label><input type="number" value={bf.qty} onChange={e=>setBf({...bf,qty:e.target.value})} min="1" className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500" required/></div>
+            <div><label className="block text-sm font-medium text-slate-700 mb-1">Date</label><input type="date" value={bf.date} onChange={e=>setBf({...bf,date:e.target.value})} className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500" required/></div>
+            <div className="bg-amber-50 rounded-lg p-3 text-xs space-y-1">
+              <div className="flex justify-between"><span>Live Price/unit</span><span className="text-green-700 font-medium">₹{bModal.cur.toFixed(2)}</span></div>
+              <div className="flex justify-between font-bold border-t border-amber-100 pt-1"><span>Total</span><span>{fmt(bf.qty*bModal.cur)}</span></div>
+            </div>
+            <div className="flex gap-3"><button type="button" onClick={()=>setBModal(null)} className="flex-1 border border-slate-200 text-slate-600 rounded-lg py-2 text-sm">Cancel</button><button type="submit" className="flex-1 bg-amber-500 text-white rounded-lg py-2 text-sm font-medium hover:bg-amber-600">Confirm Buy</button></div>
+          </form>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+// ── STOCK PICKER ──────────────────────────────────────────────────────────────
+function StockPicker(){
+  const [sel, setSel]   = useState(null);
+  const [sec, setSec]   = useState('All');
+  const [mom, setMom]   = useState('All');
+  const [sort, setSort] = useState('upside');
+  const [bf,  setBf]    = useState({qty:'10', date:new Date().toISOString().slice(0,10)});
+  const {addStock, getLiveStock, liveStatus} = useStore();
+
+  const sectors = ['All',...new Set(STOCKS.map(s=>s.sector))];
+  let list = STOCKS.map(getLiveStock);
+  if (sec!=='All') list = list.filter(s=>s.sector===sec);
+  if (mom!=='All') list = list.filter(s=>s.momentum===mom);
+  if (sort==='upside') list = [...list].sort((a,b)=>b.upside-a.upside);
+  else if (sort==='change') list = [...list].sort((a,b)=>b.change-a.change);
+  else list = [...list].sort((a,b)=>a.currentPrice-b.currentPrice);
+
+  return(
+    <div className="p-6 max-w-7xl mx-auto">
+      <div className="mb-5 flex items-start justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-800">Stock Picker</h1>
+          <p className="text-slate-500 text-sm">Short-term picks (1-4 weeks) · Live NSE prices via Yahoo Finance</p>
+        </div>
+        <LiveBadge/>
+      </div>
+
+      <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-3 mb-4 flex gap-2">
+        <span className="text-yellow-500 shrink-0">⚠️</span>
+        <p className="text-xs text-yellow-800">Educational purposes only. Subject to market risk. Consult your financial advisor before investing.</p>
+      </div>
+
+      <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-3 mb-4">
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex flex-wrap items-center gap-1"><span className="text-xs font-medium text-slate-500">Sector:</span>{sectors.slice(0,8).map(s=><button key={s} onClick={()=>setSec(s)} className={`px-2 py-0.5 rounded text-xs font-medium ${sec===s?'bg-slate-800 text-white':'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>{s}</button>)}</div>
+          <div className="flex items-center gap-1"><span className="text-xs font-medium text-slate-500">Momentum:</span>{['All','Bullish','Neutral'].map(m=><button key={m} onClick={()=>setMom(m)} className={`px-2 py-0.5 rounded text-xs font-medium ${mom===m?'bg-slate-800 text-white':'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>{m}</button>)}</div>
+          <div className="ml-auto flex items-center gap-2"><span className="text-xs text-slate-500">Sort:</span><select value={sort} onChange={e=>setSort(e.target.value)} className="text-xs border border-slate-200 rounded px-2 py-1 focus:outline-none"><option value="upside">Upside %</option><option value="change">Today's Change</option><option value="price">Price</option></select></div>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
+        <table className="w-full">
+          <thead className="bg-slate-50 text-xs text-slate-500 uppercase">
+            <tr>
+              <th className="px-3 py-2.5 text-left">Stock</th>
+              <th className="px-3 py-2.5 text-right">CMP (Live)</th>
+              <th className="px-3 py-2.5 text-right">Today</th>
+              <th className="px-3 py-2.5 text-right">Target</th>
+              <th className="px-3 py-2.5 text-right">Stop Loss</th>
+              <th className="px-3 py-2.5 text-right">Upside</th>
+              <th className="px-3 py-2.5 text-center">Momentum</th>
+              <th className="px-3 py-2.5 text-center">Hold</th>
+              <th className="px-3 py-2.5 text-left">Rationale</th>
+              <th className="px-3 py-2.5 text-center">Buy</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-50">
+            {list.map(s=>(
+              <tr key={s.id} className="hover:bg-slate-50">
+                <td className="px-3 py-3">
+                  <div className="font-bold text-slate-800 text-sm">{s.symbol}</div>
+                  <div className="text-xs text-blue-500">{s.sector}</div>
+                </td>
+                <td className="px-3 py-3 text-right">
+                  <div className="font-bold text-slate-800 text-sm">₹{s.currentPrice.toLocaleString('en-IN')}</div>
+                </td>
+                <td className="px-3 py-3 text-right">
+                  <span className={`text-xs font-semibold ${parseFloat(s.change)>=0?'text-green-600':'text-red-600'}`}>
+                    {parseFloat(s.change)>=0?'▲':'▼'} {Math.abs(parseFloat(s.change)).toFixed(2)}%
+                  </span>
+                </td>
+                <td className="px-3 py-3 text-right text-sm font-medium text-green-600">₹{s.targetPrice.toLocaleString('en-IN')}</td>
+                <td className="px-3 py-3 text-right text-sm text-red-500">₹{s.stopLoss.toLocaleString('en-IN')}</td>
+                <td className="px-3 py-3 text-right font-bold text-green-600 text-sm">+{s.upside}%</td>
+                <td className="px-3 py-3 text-center"><span className={`text-xs px-2 py-0.5 rounded-full font-medium ${momColor(s.momentum)}`}>{s.momentum}</span></td>
+                <td className="px-3 py-3 text-center text-xs text-slate-500 whitespace-nowrap">{s.holdingPeriod}</td>
+                <td className="px-3 py-3 max-w-[180px]"><p className="text-xs text-slate-500 line-clamp-2">{s.rationale}</p></td>
+                <td className="px-3 py-3 text-center"><button onClick={()=>{setSel(s);setBf({qty:'10',date:new Date().toISOString().slice(0,10)});}} className="text-xs bg-green-500 hover:bg-green-600 text-white px-3 py-1.5 rounded-lg font-medium">Buy</button></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <div className="px-4 py-2 bg-slate-50 border-t flex items-center justify-between text-xs text-slate-400">
+          <span>Showing {list.length} of {STOCKS.length} stocks · ● = Live NSE price</span>
+          {liveStatus==='error' && <span className="text-amber-500">⚠ Could not fetch live data — showing reference prices</span>}
+        </div>
+      </div>
+
+      {sel&&(
+        <Modal title="Add to Portfolio" sub={`${sel.symbol} · ${sel.name}`} onClose={()=>setSel(null)}>
+          <form onSubmit={e=>{e.preventDefault();addStock({stockId:sel.id,symbol:sel.symbol,name:sel.name,sector:sel.sector,quantity:parseInt(bf.qty),buyPrice:sel.currentPrice,targetPrice:sel.targetPrice,stopLoss:sel.stopLoss,amount:parseFloat((bf.qty*sel.currentPrice).toFixed(2)),date:bf.date});setSel(null);}} className="space-y-4">
+            <div><label className="block text-sm font-medium text-slate-700 mb-1">Quantity</label><input type="number" value={bf.qty} onChange={e=>setBf({...bf,qty:e.target.value})} min="1" className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500" required/></div>
+            <div><label className="block text-sm font-medium text-slate-700 mb-1">Date</label><input type="date" value={bf.date} onChange={e=>setBf({...bf,date:e.target.value})} className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500" required/></div>
+            <div className="bg-green-50 rounded-lg p-3 text-xs space-y-1">
+              <div className="flex justify-between"><span>Live Buy Price</span><span className="text-green-700 font-medium">₹{sel.currentPrice.toLocaleString('en-IN')}</span></div>
+              <div className="flex justify-between"><span>Target</span><span className="text-green-600">₹{sel.targetPrice.toLocaleString('en-IN')} (+{sel.upside}%)</span></div>
+              <div className="flex justify-between"><span>Stop Loss</span><span className="text-red-500">₹{sel.stopLoss.toLocaleString('en-IN')}</span></div>
+              <div className="flex justify-between font-bold border-t border-green-100 pt-1"><span>Total</span><span>{fmt(bf.qty*sel.currentPrice)}</span></div>
+            </div>
+            <div className="flex gap-3"><button type="button" onClick={()=>setSel(null)} className="flex-1 border border-slate-200 text-slate-600 rounded-lg py-2 text-sm">Cancel</button><button type="submit" className="flex-1 bg-green-500 text-white rounded-lg py-2 text-sm font-medium hover:bg-green-600">Add to Portfolio</button></div>
+          </form>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+// ── PORTFOLIO ─────────────────────────────────────────────────────────────────
+function Portfolio({setPage}){
+  const [tab, setTab] = useState('all');
+  const {sipInvs,goldInvs,stockInvs,sipTotal,goldTotal,stockTotal,sipCur,goldCur,stockCur,totalInv,totalCur,pnl,pnlPct,removeSIP,removeGold,removeStock,sipVal,goldVal,stockVal,liveP,liveNav,getEtfPrice} = useStore();
+
+  const tabs = [{id:'all',label:'All',n:sipInvs.length+goldInvs.length+stockInvs.length},{id:'sip',label:'SIP Funds',n:sipInvs.length},{id:'gold',label:'Gold ETF',n:goldInvs.length},{id:'stocks',label:'Stocks',n:stockInvs.length}];
+  const Empty = ({label,pg}) => <div className="text-center py-8 text-slate-400 text-sm">No {label} investments. <button onClick={()=>setPage(pg)} className="text-blue-500 hover:underline">Add some →</button></div>;
+
+  // Helper to get live current price for a stock investment
+  const getStockCurPrice = inv => {
+    const s = STOCKS.find(s=>s.id===inv.stockId);
+    return s && liveP[s.yfSymbol]?.price ? liveP[s.yfSymbol].price : inv.buyPrice;
+  };
+
+  return(
+    <div className="p-6 max-w-6xl mx-auto">
+      <div className="mb-5 flex items-start justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-800">Portfolio</h1>
+          <p className="text-slate-500 text-sm">Live P&L using real-time market prices</p>
+        </div>
+        <LiveBadge/>
+      </div>
+
+      <div className="grid grid-cols-4 gap-4 mb-5">
+        {[{l:'Total Invested',v:fmt(totalInv),s:'',c:'text-slate-800'},{l:'Current Value',v:fmt(totalCur),s:'Live market value',c:'text-slate-800'},{l:'Total P&L',v:`${pnl>=0?'+':''}${fmt(pnl)}`,s:`${pnlPct>=0?'+':''}${pnlPct.toFixed(2)}%`,c:pnl>=0?'text-green-600':'text-red-600'},{l:'Investments',v:sipInvs.length+goldInvs.length+stockInvs.length,s:`${sipInvs.length} SIP · ${goldInvs.length} Gold · ${stockInvs.length} Stocks`,c:'text-slate-800'}].map(s=>(
+          <div key={s.l} className="bg-white rounded-xl border border-slate-100 shadow-sm p-4">
+            <div className="text-xs text-slate-500 mb-1">{s.l}</div>
+            <div className={`text-xl font-bold ${s.c}`}>{s.v}</div>
+            {s.s&&<div className={`text-xs mt-0.5 ${s.c==='text-slate-800'?'text-slate-400':s.c}`}>{s.s}</div>}
+          </div>
+        ))}
+      </div>
+
+      <div className="flex gap-2 mb-4 pb-2 border-b border-slate-100">
+        {tabs.map(t=><button key={t.id} onClick={()=>setTab(t.id)} className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium ${tab===t.id?'bg-slate-900 text-white':'text-slate-600 hover:bg-slate-100'}`}>{t.label}<span className={`text-xs px-1.5 py-0.5 rounded-full ${tab===t.id?'bg-white/20':'bg-slate-100 text-slate-500'}`}>{t.n}</span></button>)}
+      </div>
+
+      {(tab==='all'||tab==='sip')&&(
+        <div className="mb-5">
+          {tab==='all'&&<div className="text-sm font-semibold text-slate-700 mb-2">📈 SIP Mutual Funds</div>}
+          {sipInvs.length===0?<Empty label="SIP" pg="sip"/>:(
+            <div className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-auto">
+              <table className="w-full">
+                <thead className="bg-slate-50 text-xs text-slate-500 uppercase"><tr><th className="px-4 py-2.5 text-left">Fund</th><th className="px-4 py-2.5 text-right">Category</th><th className="px-4 py-2.5 text-right">Invested</th><th className="px-4 py-2.5 text-right">Units</th><th className="px-4 py-2.5 text-right">Buy NAV</th><th className="px-4 py-2.5 text-right">Live NAV</th><th className="px-4 py-2.5 text-right">Cur. Value</th><th className="px-4 py-2.5 text-right">P&L</th><th className="px-4 py-2.5 text-right">Date</th><th className="px-4 py-2.5 text-center">—</th></tr></thead>
+                <tbody className="divide-y divide-slate-50">
+                  {sipInvs.map(inv=>{
+                    const f = SIP_FUNDS.find(f=>f.id===inv.fundId);
+                    const liveN = f && liveNav[f.id];
+                    const cv = sipVal(inv);
+                    return(
+                      <tr key={inv.id} className="hover:bg-slate-50">
+                        <td className="px-4 py-3 text-sm font-medium text-slate-800">{inv.fundName}</td>
+                        <td className="px-4 py-3 text-right"><span className="text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full">{inv.category}</span></td>
+                        <td className="px-4 py-3 text-right text-sm font-medium">{fmt(inv.amount)}</td>
+                        <td className="px-4 py-3 text-right text-sm text-slate-600">{inv.units}</td>
+                        <td className="px-4 py-3 text-right text-sm text-slate-600">₹{inv.buyNAV?.toFixed(4)}</td>
+                        <td className="px-4 py-3 text-right text-sm">
+                          {liveN ? <span className="text-green-700 font-medium">₹{liveN.toFixed(4)}</span> : <span className="text-slate-400 text-xs">—</span>}
+                        </td>
+                        <td className="px-4 py-3 text-right text-sm font-semibold">{fmt(cv)}</td>
+                        <td className="px-4 py-3"><PnLCell amount={inv.amount} cur={cv}/></td>
+                        <td className="px-4 py-3 text-right text-xs text-slate-400">{new Date(inv.date).toLocaleDateString('en-IN')}</td>
+                        <td className="px-4 py-3 text-center"><button onClick={()=>removeSIP(inv.id)} className="text-xs text-slate-400 hover:text-red-500 px-2 py-1 rounded hover:bg-red-50">Remove</button></td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {(tab==='all'||tab==='gold')&&(
+        <div className="mb-5">
+          {tab==='all'&&<div className="text-sm font-semibold text-slate-700 mb-2">🥇 Gold ETF</div>}
+          {goldInvs.length===0?<Empty label="Gold ETF" pg="gold"/>:(
+            <div className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-auto">
+              <table className="w-full">
+                <thead className="bg-slate-50 text-xs text-slate-500 uppercase"><tr><th className="px-4 py-2.5 text-left">ETF</th><th className="px-4 py-2.5 text-right">Units</th><th className="px-4 py-2.5 text-right">Buy Price</th><th className="px-4 py-2.5 text-right">Live Price</th><th className="px-4 py-2.5 text-right">Invested</th><th className="px-4 py-2.5 text-right">Cur. Value</th><th className="px-4 py-2.5 text-right">P&L</th><th className="px-4 py-2.5 text-right">Date</th><th className="px-4 py-2.5 text-center">—</th></tr></thead>
+                <tbody className="divide-y divide-slate-50">
+                  {goldInvs.map(inv=>{
+                    const e = GOLD_ETFS.find(e=>e.id===inv.etfId);
+                    const livePrice = e && liveP[e.yfSymbol]?.price;
+                    const cv = goldVal(inv);
+                    return(
+                      <tr key={inv.id} className="hover:bg-slate-50">
+                        <td className="px-4 py-3"><div className="font-medium text-slate-800 text-sm">{inv.symbol}</div><div className="text-xs text-slate-400">{inv.etfName}</div></td>
+                        <td className="px-4 py-3 text-right text-sm">{inv.units}</td>
+                        <td className="px-4 py-3 text-right text-sm">₹{inv.buyPrice}</td>
+                        <td className="px-4 py-3 text-right text-sm">{livePrice ? <span className="text-green-700 font-medium">₹{livePrice.toFixed(2)}</span> : <span className="text-slate-400 text-xs">—</span>}</td>
+                        <td className="px-4 py-3 text-right text-sm font-medium">{fmt(inv.amount)}</td>
+                        <td className="px-4 py-3 text-right text-sm font-semibold">{fmt(cv)}</td>
+                        <td className="px-4 py-3"><PnLCell amount={inv.amount} cur={cv}/></td>
+                        <td className="px-4 py-3 text-right text-xs text-slate-400">{new Date(inv.date).toLocaleDateString('en-IN')}</td>
+                        <td className="px-4 py-3 text-center"><button onClick={()=>removeGold(inv.id)} className="text-xs text-slate-400 hover:text-red-500 px-2 py-1 rounded hover:bg-red-50">Remove</button></td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {(tab==='all'||tab==='stocks')&&(
+        <div className="mb-5">
+          {tab==='all'&&<div className="text-sm font-semibold text-slate-700 mb-2">📊 Stocks</div>}
+          {stockInvs.length===0?<Empty label="Stock" pg="stocks"/>:(
+            <div className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-auto">
+              <table className="w-full">
+                <thead className="bg-slate-50 text-xs text-slate-500 uppercase"><tr><th className="px-4 py-2.5 text-left">Stock</th><th className="px-4 py-2.5 text-right">Qty</th><th className="px-4 py-2.5 text-right">Buy</th><th className="px-4 py-2.5 text-right">Live CMP</th><th className="px-4 py-2.5 text-right">Target</th><th className="px-4 py-2.5 text-right">Stop Loss</th><th className="px-4 py-2.5 text-right">Invested</th><th className="px-4 py-2.5 text-right">Cur. Value</th><th className="px-4 py-2.5 text-right">P&L</th><th className="px-4 py-2.5 text-right">Date</th><th className="px-4 py-2.5 text-center">—</th></tr></thead>
+                <tbody className="divide-y divide-slate-50">
+                  {stockInvs.map(inv=>{
+                    const curPrice = getStockCurPrice(inv);
+                    const isLive = curPrice !== inv.buyPrice;
+                    const cv = stockVal(inv);
+                    return(
+                      <tr key={inv.id} className="hover:bg-slate-50">
+                        <td className="px-4 py-3"><div className="font-bold text-slate-800 text-sm">{inv.symbol}</div><div className="text-xs text-slate-400">{inv.sector}</div></td>
+                        <td className="px-4 py-3 text-right text-sm">{inv.quantity}</td>
+                        <td className="px-4 py-3 text-right text-sm">₹{inv.buyPrice.toLocaleString('en-IN')}</td>
+                        <td className="px-4 py-3 text-right text-sm">{isLive ? <span className="text-green-700 font-medium">₹{curPrice.toLocaleString('en-IN')}</span> : <span className="text-slate-400">—</span>}</td>
+                        <td className="px-4 py-3 text-right text-sm text-green-600 font-medium">₹{inv.targetPrice.toLocaleString('en-IN')}</td>
+                        <td className="px-4 py-3 text-right text-sm text-red-500">₹{inv.stopLoss.toLocaleString('en-IN')}</td>
+                        <td className="px-4 py-3 text-right text-sm font-medium">{fmt(inv.amount)}</td>
+                        <td className="px-4 py-3 text-right text-sm font-semibold">{fmt(cv)}</td>
+                        <td className="px-4 py-3"><PnLCell amount={inv.amount} cur={cv}/></td>
+                        <td className="px-4 py-3 text-right text-xs text-slate-400">{new Date(inv.date).toLocaleDateString('en-IN')}</td>
+                        <td className="px-4 py-3 text-center"><button onClick={()=>removeStock(inv.id)} className="text-xs text-slate-400 hover:text-red-500 px-2 py-1 rounded hover:bg-red-50">Remove</button></td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── APP ───────────────────────────────────────────────────────────────────────
+function App(){
+  const [page, setPage] = useState('dashboard');
+  return(
+    <div className="flex h-screen overflow-hidden">
+      <Sidebar page={page} setPage={setPage}/>
+      <main className="flex-1 overflow-y-auto bg-slate-100">
+        {page==='dashboard' && <Dashboard setPage={setPage}/>}
+        {page==='sip'       && <SIPManager/>}
+        {page==='gold'      && <GoldETF/>}
+        {page==='stocks'    && <StockPicker/>}
+        {page==='portfolio' && <Portfolio setPage={setPage}/>}
+      </main>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(
+  <StoreProvider><App/></StoreProvider>
+);
+</script>
+</body>
+</html>
