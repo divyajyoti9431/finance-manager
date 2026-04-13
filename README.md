@@ -6,9 +6,7 @@ A personal finance management desktop/web app for tracking **SIP Mutual Funds**,
 
 ## 🎬 Demo
 
-https://github.com/user-attachments/assets/DEMO_VIDEO_PLACEHOLDER
-
-> *Replace the link above after uploading `Finance manager.mp4` as a GitHub Release asset (see [Adding the Demo Video](#adding-the-demo-video) below)*
+https://github.com/divyajyoti9431/finance-manager/releases/download/v1.0.0/Finance.manager.mp4
 
 ---
 
